@@ -30,7 +30,6 @@
 # This script generates Contacts.xml valid for MicroSIP VoIP client v3.10
 # ---------------------------------------------------------------------------
 
-import codecs
 import configparser
 import os
 import re
@@ -45,16 +44,16 @@ __version__ = '1.0'
 __url__ = 'https://github.com/gitRigge/CardDAV2MicroSIP'
 __license__ = 'MIT License (MIT)'
 
-microSipDataPath = os.environ['APPDATA']+'\MicroSIP'
-bridgeDataPath = os.environ['LOCALAPPDATA']+'\CardDAV2MicroSIP'
+microSipDataPath = os.path.join(os.environ['APPDATA'], 'MicroSIP')
+bridgeDataPath = os.path.join(os.environ['LOCALAPPDATA'], 'CardDAV2MicroSIP')
 bridge_config = configparser.ConfigParser()
 bridge_config.read(os.path.join(bridgeDataPath, 'bridge.conf'))
 microsip_config = configparser.ConfigParser()
-microsip_config.read_file(codecs.open(os.path.join(microSipDataPath, 'microsip.ini'), 'r', 'utf16'))
+microsip_config.read_file(open(os.path.join(microSipDataPath, 'microsip.ini'), 'r', encoding='utf16'))
 
 def get_country_code():
     """Tries to find country code info in MicroSIP config file and returns it."""
-    p = re.compile('(\+[0-9]{1,3})')
+    p = re.compile(r'(\+[0-9]{1,3})')
     for section in microsip_config.sections():
         if microsip_config.has_option(section,'dialPlan'):
             m = p.search(microsip_config.get(section,'dialPlan'))
@@ -68,8 +67,10 @@ def get_carddav_data():
     servers = bridge_config.sections()
     counter = 1
     for server in servers:
+        print("Reading ", server, " from servers.")
         accounts[counter] = {}
         _urls = []
+        _files = []
         for key in bridge_config[server]:
             if key == 'user':
                 accounts[counter]['user'] = bridge_config[server]['user']
@@ -77,10 +78,24 @@ def get_carddav_data():
                 accounts[counter]['pass'] = bridge_config[server]['pass']
             elif key.startswith('url'):
                 _urls.append(bridge_config[server][key])
+            elif key.startswith('file'):
+                _files.append(bridge_config[server][key])
         accounts[counter]['url'] = _urls
+        accounts[counter]['file'] = _files
         counter = counter + 1
     contents = ''
     for account in accounts:
+        print("Processing ", account, " from servers.")
+        for abook in accounts[account]['file']:
+            try:
+                if os.path.exists(abook):
+                    with open(abook, 'r', encoding='utf8') as file:
+                        content = file.read()
+                    contents = contents + content
+                else:
+                    print("File ", abook, " not found! Please check bridge.conf.")
+            except:
+                continue
         for abook in accounts[account]['url']:
             try:
                 response = requests.get(abook+'/?export', auth = HTTPBasicAuth(accounts[account]['user'], accounts[account]['pass']))
